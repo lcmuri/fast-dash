@@ -1,2 +1,0 @@
-class CategoryRepository:
-    pass
