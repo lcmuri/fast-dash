@@ -10,6 +10,7 @@ from app.application.schemas.ims.medicine_schemas import (
     MedicineUpdate,
     MedicineResponse,
     CategoryCreate,
+    CategoryUpdate, # Added for update
     CategoryResponse,
     DoseFormCreate,
     DoseFormResponse,
@@ -110,6 +111,7 @@ async def create_category(
 ):
     """
     Create a new category.
+    Optionally specify `parent_id` to create a nested category.
     """
     return await use_cases.create_category(category_create)
 
@@ -120,9 +122,52 @@ async def list_categories(
     use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
 ):
     """
-    Retrieve a list of all categories with pagination.
+    Retrieve a list of all categories with pagination (flat list).
     """
     return await use_cases.list_categories(skip, limit)
+
+@router.get("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
+async def get_category_by_id(
+    category_id: int,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Retrieve a single category by its ID.
+    """
+    return await use_cases.get_category_by_id(category_id)
+
+@router.put("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
+async def update_category(
+    category_id: int,
+    category_update: CategoryUpdate,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Update an existing category record.
+    """
+    return await use_cases.update_category(category_id, category_update)
+
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["IMS - Categories"])
+async def delete_category(
+    category_id: int,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Delete a category record by its ID.
+    Note: Deleting a parent category will also delete its descendants by default with MPTT.
+    """
+    await use_cases.delete_category(category_id)
+    return {"message": "Category deleted successfully"}
+
+
+@router.get("/categories/tree", response_model=List[CategoryResponse], tags=["IMS - Categories"])
+async def get_category_tree(
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Retrieve all categories in a hierarchical tree structure.
+    """
+    return await use_cases.get_category_tree()
 
 # --- DoseForm Endpoints ---
 @router.post("/dose-forms/", response_model=DoseFormResponse, status_code=status.HTTP_201_CREATED, tags=["IMS - Dose Forms"])

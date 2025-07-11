@@ -105,22 +105,63 @@ class MedicineService:
         """
         await self._repository.remove_categories_from_medicine(medicine_id, category_ids)
 
-    async def create_new_category(self, category_data: CategoryEntity) -> CategoryEntity:
+    async def create_new_category(self, category_data: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
         """
-        Creates a new category.
+        Creates a new category, optionally as a child of another.
         """
         if not category_data.slug:
             category_data.slug = slugify(category_data.name)
+        
         # Ensure slug uniqueness for categories
-        # This would require a get_category_by_slug method in the repository
-        # For now, assuming slug is unique or handled by DB constraint
-        return await self._repository.create_category(category_data)
+        existing_category = await self._repository.get_category_by_slug(category_data.slug)
+        if existing_category:
+            raise ValueError(f"Category with slug '{category_data.slug}' already exists.")
+
+        return await self._repository.create_category(category_data, parent_id)
+
+    async def update_category_details(self, category_id: int, category_data: CategoryEntity) -> Optional[CategoryEntity]:
+        """
+        Updates an existing category.
+        """
+        existing_category = await self._repository.get_category_by_id(category_id)
+        if not existing_category:
+            return None
+
+        # Apply updates
+        existing_category.name = category_data.name
+        existing_category.description = category_data.description
+        existing_category.status = category_data.status
+        if category_data.slug: # Only update slug if explicitly provided
+            existing_category.slug = category_data.slug
+        else: # If name changed and slug not provided, regenerate
+            existing_category.slug = slugify(category_data.name)
+
+        # Ensure updated slug uniqueness (excluding itself)
+        if existing_category.slug:
+            check_existing = await self._repository.get_category_by_slug(existing_category.slug)
+            if check_existing and check_existing.id != category_id:
+                raise ValueError(f"Category with slug '{existing_category.slug}' already exists.")
+
+        return await self._repository.update_category(category_id, existing_category)
+
+    async def delete_category_record(self, category_id: int) -> bool:
+        """
+        Deletes a category record.
+        """
+        return await self._repository.delete_category(category_id)
+
 
     async def list_all_categories(self, skip: int = 0, limit: int = 100) -> List[CategoryEntity]:
         """
-        Lists all categories.
+        Lists all categories with pagination (flat list).
         """
         return await self._repository.get_all_categories(skip, limit)
+
+    async def get_category_tree(self) -> List[CategoryEntity]:
+        """
+        Retrieves all categories in a hierarchical tree structure.
+        """
+        return await self._repository.get_category_tree()
 
     async def create_new_dose_form(self, dose_form_data: DoseFormEntity) -> DoseFormEntity:
         """

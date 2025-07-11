@@ -1,7 +1,7 @@
 # app/application/schemas/ims/medicine_schemas.py
 
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List
+from typing import Optional, List, ForwardRef
 from datetime import datetime
 
 # Enums (can be reused from core/enums or defined here if specific to schemas)
@@ -36,6 +36,9 @@ class ATCCodeResponse(ATCCodeBase):
     class Config:
         from_attributes = True
 
+# Define CategoryResponse as a ForwardRef because it's self-referencing
+CategoryResponse = ForwardRef("CategoryResponse")
+
 class CategoryBase(BaseModel):
     name: str
     slug: Optional[str] = None
@@ -43,16 +46,30 @@ class CategoryBase(BaseModel):
     status: str = ActiveStatusSchema.ACTIVE
 
 class CategoryCreate(CategoryBase):
-    parent_id: Optional[int] = None
+    parent_id: Optional[int] = None # Allow specifying parent during creation
+
+class CategoryUpdate(CategoryBase):
+    # For updates, all fields are optional
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    # parent_id: Optional[int] = None # Moving a category is a separate operation in MPTT
 
 class CategoryResponse(CategoryBase):
     id: int
     parent_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    level: Optional[int] = None # MPTT level
+    children: List[CategoryResponse] = Field(default_factory=list) # Recursive field
 
     class Config:
         from_attributes = True
+
+# Rebuild the CategoryResponse model to resolve the ForwardRef
+CategoryResponse.model_rebuild()
+
 
 class DoseFormBase(BaseModel):
     name: str

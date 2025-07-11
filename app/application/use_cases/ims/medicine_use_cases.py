@@ -3,7 +3,6 @@
 from typing import List, Optional
 from fastapi import HTTPException, status
 
-# Import domain entities
 from app.domains.ims.medicine.entities.medicine import (
     MedicineEntity,
     CategoryEntity,
@@ -11,14 +10,13 @@ from app.domains.ims.medicine.entities.medicine import (
     StrengthEntity,
     ATCCodeEntity
 )
-# Import domain service
 from app.domains.ims.medicine.services.medicine_service import MedicineService
-# Import Pydantic schemas for request/response
 from app.application.schemas.ims.medicine_schemas import (
     MedicineCreate,
     MedicineUpdate,
     MedicineResponse,
     CategoryCreate,
+    CategoryUpdate, # Added for update
     CategoryResponse,
     DoseFormCreate,
     DoseFormResponse,
@@ -42,7 +40,7 @@ class MedicineUseCases:
         """
         Creates a new medicine, handles category and ATC code associations.
         """
-        # Convert Pydantic schema (input) to domain entity
+        # Convert schema to domain entity
         medicine_entity = MedicineEntity(
             name=medicine_create.name,
             slug=medicine_create.slug,
@@ -52,30 +50,23 @@ class MedicineUseCases:
         )
 
         try:
-            # Call domain service to create the medicine
             created_medicine_entity = await self._medicine_service.create_new_medicine(medicine_entity)
-
-            # Handle associated categories if provided
             if medicine_create.category_ids:
                 await self._medicine_service.add_categories_to_medicine(
                     created_medicine_entity.id, medicine_create.category_ids
                 )
-            # Handle associated ATC codes if provided
             if medicine_create.atc_code_ids:
                 await self._medicine_service.add_atc_codes_to_medicine(
                     created_medicine_entity.id, medicine_create.atc_code_ids
                 )
 
             # Re-fetch the complete entity to include relationships for the response
-            # This ensures the response model has all the nested data populated
             full_medicine_entity = await self._medicine_service.get_medicine_details(created_medicine_entity.id)
-            return MedicineResponse.model_validate(full_medicine_entity) # Convert domain entity to Pydantic response schema
+            return MedicineResponse.model_validate(full_medicine_entity) # Pydantic v2+
 
         except ValueError as e:
-            # Map domain-specific errors to HTTP exceptions
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
-            # Catch unexpected errors
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create medicine: {e}")
 
 
@@ -93,7 +84,6 @@ class MedicineUseCases:
         Lists all medicines with pagination.
         """
         medicine_entities = await self._medicine_service.list_all_medicines(skip, limit)
-        # Convert list of domain entities to list of Pydantic response schemas
         return [MedicineResponse.model_validate(entity) for entity in medicine_entities]
 
     async def update_medicine(self, medicine_id: int, medicine_update: MedicineUpdate) -> MedicineResponse:
@@ -104,8 +94,7 @@ class MedicineUseCases:
         if not existing_medicine_entity:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medicine not found")
 
-        # Apply updates from Pydantic schema to existing domain entity, only if present in the update payload
-        # `exclude_unset=True` ensures only fields provided by the client are considered for update
+        # Apply updates from schema to entity, only if present in the update payload
         update_data = medicine_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             # Exclude relationship lists from direct attribute setting, as they are handled separately
@@ -113,7 +102,6 @@ class MedicineUseCases:
                 setattr(existing_medicine_entity, key, value)
 
         try:
-            # Update the main medicine details
             updated_medicine_entity = await self._medicine_service.update_medicine_details(medicine_id, existing_medicine_entity)
 
             # Handle category relationship updates
@@ -149,23 +137,66 @@ class MedicineUseCases:
 
     # --- Category Use Cases ---
     async def create_category(self, category_create: CategoryCreate) -> CategoryResponse:
-        # Convert schema to entity
         category_entity = CategoryEntity(
             name=category_create.name,
             slug=category_create.slug,
             description=category_create.description,
             status=category_create.status,
-            parent_id=category_create.parent_id
+            # parent_id is handled by the service layer for MPTT insertion
         )
         try:
-            created_category = await self._medicine_service.create_new_category(category_entity)
+            created_category = await self._medicine_service.create_new_category(category_entity, category_create.parent_id)
             return CategoryResponse.model_validate(created_category)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    async def get_category_by_id(self, category_id: int) -> CategoryResponse:
+        category_entity = await self._medicine_service.get_category_by_id(category_id)
+        if not category_entity:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        return CategoryResponse.model_validate(category_entity)
+
+    async def update_category(self, category_id: int, category_update: CategoryUpdate) -> CategoryResponse:
+        existing_category_entity = await self._medicine_service.get_category_by_id(category_id)
+        if not existing_category_entity:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+        # Apply updates from schema to entity
+        update_data = category_update.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            if hasattr(existing_category_entity, key):
+                setattr(existing_category_entity, key, value)
+        
+        try:
+            updated_category = await self._medicine_service.update_category_details(category_id, existing_category_entity)
+            return CategoryResponse.model_validate(updated_category)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update category: {e}")
+
+    async def delete_category(self, category_id: int) -> bool:
+        success = await self._medicine_service.delete_category_record(category_id)
+        if not success:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found or could not be deleted.")
+        return True
+
     async def list_categories(self, skip: int = 0, limit: int = 100) -> List[CategoryResponse]:
         category_entities = await self._medicine_service.list_all_categories(skip, limit)
         return [CategoryResponse.model_validate(entity) for entity in category_entities]
+
+    async def get_category_tree(self) -> List[CategoryResponse]:
+        """
+        Retrieves all categories in a hierarchical tree structure.
+        """
+        category_entities_tree = await self._medicine_service.get_category_tree()
+        # Recursively convert entities to response schemas
+        def convert_entity_to_response(entity: CategoryEntity) -> CategoryResponse:
+            response = CategoryResponse.model_validate(entity)
+            response.children = [convert_entity_to_response(child) for child in entity.children]
+            return response
+
+        return [convert_entity_to_response(root) for root in category_entities_tree]
 
     # --- DoseForm Use Cases ---
     async def create_dose_form(self, dose_form_create: DoseFormCreate) -> DoseFormResponse:

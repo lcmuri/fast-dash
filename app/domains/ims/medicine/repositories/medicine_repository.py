@@ -69,12 +69,27 @@ class IMedicineRepository(ABC):
 
     @abstractmethod
     async def get_all_categories(self, skip: int = 0, limit: int = 100) -> List[CategoryEntity]:
-        """Retrieves all categories with pagination."""
+        """Retrieves all categories with pagination (flat list)."""
         pass
 
     @abstractmethod
-    async def create_category(self, category: CategoryEntity) -> CategoryEntity:
-        """Creates a new category record."""
+    async def get_category_tree(self) -> List[CategoryEntity]:
+        """Retrieves all categories in a hierarchical tree structure."""
+        pass
+
+    @abstractmethod
+    async def create_category(self, category: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
+        """Creates a new category record, optionally as a child of another."""
+        pass
+
+    @abstractmethod
+    async def update_category(self, category_id: int, category: CategoryEntity) -> Optional[CategoryEntity]:
+        """Updates an existing category record."""
+        pass
+
+    @abstractmethod
+    async def delete_category(self, category_id: int) -> bool:
+        """Deletes a category record by its ID."""
         pass
 
     @abstractmethod

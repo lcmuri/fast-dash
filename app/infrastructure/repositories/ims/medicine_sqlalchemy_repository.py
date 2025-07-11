@@ -3,6 +3,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy_mptt import InvalidNodeError # Import MPTT specific exceptions
 
 from app.domains.ims.medicine.repositories.medicine_repository import IMedicineRepository
 from app.domains.ims.medicine.entities.medicine import (
@@ -24,7 +25,7 @@ from app.infrastructure.database.models.ims.medicine import (
 
 class MedicineSQLAlchemyRepository(IMedicineRepository):
     """
-    Concrete implementation of IMedicineRepository using SQLAlchemy.
+    Concrete implementation of IMedicineRepository using SQLAlchemy and MPTT for categories.
     Translates between domain entities and SQLAlchemy ORM models.
     """
     def __init__(self, db: Session):
@@ -55,6 +56,11 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
     def _to_category_entity(self, orm_category: Category) -> CategoryEntity:
         if not orm_category:
             return None
+        
+        # MPTT models have .children, but it's a query property.
+        # To get the full hierarchy, we'll rely on get_category_tree or build it.
+        # For a single category, we'll just return its direct properties.
+        # The `children` list in the entity will be populated when building the tree.
         return CategoryEntity(
             id=orm_category.id,
             parent_id=orm_category.parent_id,
@@ -63,7 +69,9 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
             description=orm_category.description,
             status=orm_category.status,
             created_at=orm_category.created_at,
-            updated_at=orm_category.updated_at
+            updated_at=orm_category.updated_at,
+            level=orm_category.level, # Include MPTT level
+            children=[] # Children will be populated when building the tree
         )
 
     def _to_dose_form_entity(self, orm_dose_form: DoseForm) -> DoseFormEntity:
@@ -192,7 +200,7 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         self.db.commit()
         self.db.refresh(orm_medicine)
 
-    # --- Category CRUD ---
+    # --- Category CRUD (MPTT-aware) ---
     async def get_category_by_id(self, category_id: int) -> Optional[CategoryEntity]:
         orm_category = self.db.query(Category).filter(Category.id == category_id).first()
         return self._to_category_entity(orm_category)
@@ -205,18 +213,108 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         orm_categories = self.db.query(Category).offset(skip).limit(limit).all()
         return [self._to_category_entity(c) for c in orm_categories]
 
-    async def create_category(self, category_entity: CategoryEntity) -> CategoryEntity:
+    async def get_category_tree(self) -> List[CategoryEntity]:
+        """
+        Retrieves all categories and constructs a hierarchical structure using MPTT's methods.
+        """
+        # Use MPTT's `get_tree()` method which returns a list of root nodes
+        # with their children loaded recursively.
+        # Note: MPTT's get_tree() returns ORM objects with `children` populated.
+        orm_tree_roots = self.db.query(Category).order_by(Category.tree_id, Category.lft).as_tree(nested=True)
+
+        # Helper to convert ORM tree to Entity tree
+        def convert_orm_node_to_entity_node(orm_node: Category) -> CategoryEntity:
+            entity_node = CategoryEntity(
+                id=orm_node.id,
+                parent_id=orm_node.parent_id,
+                name=orm_node.name,
+                slug=orm_node.slug,
+                description=orm_node.description,
+                status=orm_node.status,
+                created_at=orm_node.created_at,
+                updated_at=orm_node.updated_at,
+                level=orm_node.level,
+                children=[convert_orm_node_to_entity_node(child) for child in orm_node.children]
+            )
+            return entity_node
+
+        return [convert_orm_node_to_entity_node(root) for root in orm_tree_roots]
+
+
+    async def create_category(self, category_entity: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
         orm_category = Category(
             name=category_entity.name,
             slug=category_entity.slug,
             description=category_entity.description,
             status=category_entity.status,
-            parent_id=category_entity.parent_id
+            # MPTT will set parent_id, level, lft, rgt
+            # Do NOT set parent_id directly here if using insert_node or append_child
         )
+
+        if parent_id:
+            parent_orm = self.db.query(Category).filter(Category.id == parent_id).first()
+            if not parent_orm:
+                raise ValueError(f"Parent category with ID {parent_id} not found.")
+            try:
+                # Use MPTT's append_child to insert as a child
+                parent_orm.append_child(orm_category)
+                self.db.commit()
+                self.db.refresh(orm_category)
+            except InvalidNodeError as e:
+                self.db.rollback()
+                raise ValueError(f"Failed to append child category: {e}")
+        else:
+            # Insert as a root node
+            self.db.add(orm_category)
+            self.db.commit()
+            self.db.refresh(orm_category)
+            # For root nodes, you might need to call `rebuild_tree` if not using `insert_node`
+            # or if auto-rebuild is off. `sqlalchemy_mptt` usually handles this on commit.
+
+        return self._to_category_entity(orm_category)
+
+    async def update_category(self, category_id: int, category_entity: CategoryEntity) -> Optional[CategoryEntity]:
+        orm_category = self.db.query(Category).filter(Category.id == category_id).first()
+        if not orm_category:
+            return None
+
+        orm_category.name = category_entity.name
+        orm_category.slug = category_entity.slug
+        orm_category.description = category_entity.description
+        orm_category.status = category_entity.status
+        orm_category.updated_at = func.now()
+
+        # If parent_id changes, you'd use MPTT's move_to() method
+        # This is more complex and depends on your update logic.
+        # For simplicity, this example assumes parent_id is not changed via this method,
+        # or it's handled by a separate "move_category" operation.
+        # If category_entity.parent_id is provided and differs, you'd fetch the new parent
+        # and call orm_category.move_to(new_parent_orm, position='last-child')
+
         self.db.add(orm_category)
         self.db.commit()
         self.db.refresh(orm_category)
         return self._to_category_entity(orm_category)
+
+    async def delete_category(self, category_id: int) -> bool:
+        orm_category = self.db.query(Category).filter(Category.id == category_id).first()
+        if not orm_category:
+            return False
+        
+        # MPTT provides methods for deleting nodes and their descendants
+        # orm_category.delete() # Deletes the node and its descendants
+        # orm_category.delete_node() # Deletes the node, children become siblings of parent
+        
+        # For this example, let's assume `delete()` which removes the node and its subtree.
+        # If you only want to delete a single node and re-parent children, use `delete_node()`.
+        try:
+            orm_category.delete() # This method is provided by MPTTMixin
+            self.db.commit()
+            return True
+        except InvalidNodeError as e:
+            self.db.rollback()
+            print(f"Error deleting category: {e}")
+            return False
 
     # --- DoseForm CRUD ---
     async def get_dose_form_by_id(self, dose_form_id: int) -> Optional[DoseFormEntity]:
