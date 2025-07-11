@@ -1,0 +1,18 @@
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+fastapi dev main.py
+python -m venv .venv
+pip freeze > requirements.txt
+pip freeze | grep "your_package_name" >> requirements.txt
+
+pip install psycopg2-binary
+pip freeze | grep psycopg2-binary >> requirements.txt
+
+✅ 4. Use a tool like pipreqs (optional)
+To generate requirements.txt based only on imported modules in your code:
+
+bash
+Copy
+Edit
+pip install pipreqs
+pipreqs /path/to/your/project

@@ -1,0 +1,95 @@
+app/
+├── core/                        # Core application components
+│   ├── config/                  # Configuration settings
+│   │   ├── base.py              # Base configuration
+│   │   ├── development.py       # Dev-specific settings
+│   │   └── production.py        # Prod-specific settings
+│   ├── exceptions/              # Custom exceptions
+│   ├── logging/                 # Logging configuration
+│   ├── middleware/              # Application middleware
+│   └── utils/                   # Utility functions and helpers
+│
+├── domains/                     # Domain layers for each feature
+│   ├── ims/                     # Inventory Management System
+│   │   ├── medicine/            # Medicine sub-feature
+│   │   │   ├── entities/        # Domain models
+│   │   │   │   └── medicine.py  # Contains MedicineEntity, CategoryEntity, DoseFormEntity, StrengthEntity, ATCCodeEntity
+│   │   │   ├── repositories/    # Repository interfaces
+│   │   │   │   └── medicine_repository.py # Defines IMedicineRepository interface
+│   │   │   └── services/        # Domain services
+│   │   │       └── medicine_service.py # Implements MedicineService
+│   │   ├── product/             # Product sub-feature
+│   │   ├── supplier/            # Supplier management
+│   │   └── inventory/           # Inventory tracking
+│   │
+│   ├── hrm/                     # Human Resource Management
+│   │   ├── employee/            # Employee management
+│   │   ├── attendance/          # Attendance tracking
+│   │   └── payroll/             # Payroll processing
+│   │
+│   └── warehouse/               # Warehouse Management
+│       ├── location/            # Warehouse locations
+│       ├── storage/             # Storage management
+│       └── movement/            # Stock movement
+│
+├── infrastructure/              # Infrastructure implementations
+│   ├── database/                # Database setup
+│   │   ├── migrations/          # Database migrations (empty, typically managed by Alembic)
+│   │   ├── models/              # ORM models
+│   │   │   ├── ims/             # IMS models
+│   │   │   │   ├── __init__.py  # Makes 'ims' a package, imports models
+│   │   │   │   └── medicine.py  # SQLAlchemy ORM models (Medicine, Category, DoseForm, Strength, ATCCode, pivot tables)
+│   │   │   ├── hrm/             # HRM models
+│   │   │   └── warehouse/       # Warehouse models
+│   │   └── session.py           # Database session management (get_db, create_all_tables)
+│   │
+│   ├── cache/                   # Caching layer
+│   ├── file_storage/            # File storage handling
+│   └── repositories/            # Repository implementations
+│       ├── ims/                 # IMS repositories
+│       │   ├── __init__.py      # Makes 'ims' a package, imports concrete repositories
+│       │   └── medicine_sqlalchemy_repository.py # Implements IMedicineRepository using SQLAlchemy
+│       ├── hrm/                 # HRM repositories
+│       └── warehouse/           # Warehouse repositories
+│
+├── application/                 # Application layer
+│   ├── use_cases/               # Application use cases
+│   │   ├── ims/                 # IMS use cases
+│   │   │   ├── __init__.py      # Makes 'ims' a package, imports use cases
+│   │   │   └── medicine_use_cases.py # Implements MedicineUseCases
+│   │   ├── hrm/                 # HRM use cases
+│   │   └── warehouse/           # Warehouse use cases
+│   │
+│   ├── schemas/                 # Request/response schemas
+│   │   ├── ims/                 # IMS schemas
+│   │   │   ├── __init__.py      # Makes 'ims' a package, imports schemas
+│   │   │   └── medicine_schemas.py # Pydantic schemas (MedicineCreate, MedicineResponse, etc.)
+│   │   ├── hrm/                 # HRM schemas
+│   │   └── warehouse/           # Warehouse schemas
+│   │
+│   └── workers/                 # Background workers
+│
+├── interfaces/                  # Interface adapters
+│   ├── api/                     # Web API interface
+│   │   ├── v1/                  # API version 1
+│   │   │   ├── routers/         # Feature routers
+│   │   │   │   ├── ims/         # IMS endpoints
+│   │   │   │   │   ├── __init__.py # Makes 'ims' a package, imports routers
+│   │   │   │   │   └── medicine_router.py # FastAPI router for medicine endpoints
+│   │   │   │   ├── hrm/         # HRM endpoints
+│   │   │   │   └── warehouse/   # Warehouse endpoints
+│   │   │   └── dependencies.py  # API dependencies (empty, but common for shared dependencies)
+│   │   └── errors/              # API error handlers (empty, for custom exception handlers)
+│   │
+│   ├── cli/                     # Command line interface
+│   └── external/                # External service integrations
+│
+├── tests/                       # Test suites
+│   ├── unit/                    # Unit tests
+│   │   ├── domains/             # Domain tests
+│   │   └── application/         # Application tests
+│   ├── integration/             # Integration tests
+│   └── e2e/                     # End-to-end tests
+│
+├── scripts/                     # Utility scripts
+└── main.py                      # Application entry point (FastAPI app initialization, router inclusion)
