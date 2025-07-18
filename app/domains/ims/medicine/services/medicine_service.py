@@ -21,6 +21,7 @@ class MedicineService:
     def __init__(self, repository: IMedicineRepository):
         self._repository = repository
 
+    # Medicine related methods
     async def get_medicine_details(self, medicine_id: int) -> Optional[MedicineEntity]:
         """
         Retrieves full details of a medicine, including its categories, strengths, and ATC codes.
@@ -105,6 +106,7 @@ class MedicineService:
         """
         await self._repository.remove_categories_from_medicine(medicine_id, category_ids)
 
+    # Category related methods
     async def create_new_category(self, category_data: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
         """
         Creates a new category, optionally as a child of another.
@@ -118,6 +120,12 @@ class MedicineService:
             raise ValueError(f"Category with slug '{category_data.slug}' already exists.")
 
         return await self._repository.create_category(category_data, parent_id)
+
+    async def get_category_by_id(self, category_id: int) -> Optional[CategoryEntity]:
+        """
+        Retrieves a single category by its ID.
+        """
+        return await self._repository.get_category_by_id(category_id)
 
     async def update_category_details(self, category_id: int, category_data: CategoryEntity) -> Optional[CategoryEntity]:
         """
@@ -163,6 +171,7 @@ class MedicineService:
         """
         return await self._repository.get_category_tree()
 
+    # DoseForm related methods
     async def create_new_dose_form(self, dose_form_data: DoseFormEntity) -> DoseFormEntity:
         """
         Creates a new dose form.
@@ -174,7 +183,8 @@ class MedicineService:
         Lists all dose forms.
         """
         return await self._repository.get_all_dose_forms(skip, limit)
-
+ 
+#  Strength related methods
     async def create_new_strength(self, strength_data: StrengthEntity) -> StrengthEntity:
         """
         Creates a new strength for a medicine.
@@ -192,6 +202,7 @@ class MedicineService:
         """
         return await self._repository.get_strengths_for_medicine(medicine_id)
 
+# ATC Code related methods
     async def create_new_atc_code(self, atc_code_data: ATCCodeEntity) -> ATCCodeEntity:
         """
         Creates a new ATC code.

@@ -1,0 +1,31 @@
+from sqlalchemy.orm import declarative_base, declared_attr, relationship, Mapped, mapped_column
+from sqlalchemy import String, Integer, ForeignKey
+
+Base = declarative_base()
+
+@declarative_mixin
+class UserReferenceMixin:
+    """A mixin that adds a 'user_id' column and a 'user' relationship."""
+    @declared_attr
+    def user_id(cls) -> Mapped[Integer]:
+        # 'cls.__tablename__' refers to the table name of the inheriting class
+        return mapped_column(ForeignKey('users.id'))
+
+    @declared_attr
+    def user(cls) -> Mapped["User"]:
+        # 'cls' here refers to the class that inherits this mixin
+        return relationship("User", foreign_keys=[cls.user_id])
+
+class User(Base):
+    __tablename__ = 'users'
+    id: Mapped[Integer] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50))
+
+class BlogPost(Base, UserReferenceMixin):
+    __tablename__ = 'blog_posts'
+    id: Mapped[Integer] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(String)
+
+# BlogPost will now have a 'user_id' column (referencing 'users.id')
+# and a 'user' relationship that connects it to the User model.

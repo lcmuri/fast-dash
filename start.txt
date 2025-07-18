@@ -1,6 +1,9 @@
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
+
 fastapi dev main.py
+uvicorn main:app --reload
+
 python -m venv .venv
 pip freeze > requirements.txt
 pip freeze | grep "your_package_name" >> requirements.txt

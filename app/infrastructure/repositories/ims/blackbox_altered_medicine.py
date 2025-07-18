@@ -1,5 +1,3 @@
-# app/infrastructure/repositories/ims/medicine_sqlalchemy_repository.py
-
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -24,14 +22,9 @@ from app.infrastructure.database.models.ims.medicine import (
 )
 
 class MedicineSQLAlchemyRepository(IMedicineRepository):
-    """
-    Concrete implementation of IMedicineRepository using SQLAlchemy and MPTT for categories.
-    Translates between domain entities and SQLAlchemy ORM models.
-    """
     def __init__(self, db: Session):
         self.db = db
 
-    # --- Helper functions for entity <-> ORM model conversion ---
     def _to_medicine_entity(self, orm_medicine: Medicine) -> MedicineEntity:
         if not orm_medicine:
             return None
@@ -56,11 +49,6 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
     def _to_category_entity(self, orm_category: Category) -> CategoryEntity:
         if not orm_category:
             return None
-        
-        # MPTT models have .children, but it's a query property.
-        # To get the full hierarchy, we'll rely on get_category_tree or build it.
-        # For a single category, we'll just return its direct properties.
-        # The `children` list in the entity will be populated when building the tree.
         return CategoryEntity(
             id=orm_category.id,
             parent_id=orm_category.parent_id,
@@ -70,8 +58,8 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
             status=orm_category.status,
             created_at=orm_category.created_at,
             updated_at=orm_category.updated_at,
-            level=orm_category.level, # Include MPTT level
-            children=[] # Children will be populated when building the tree
+            level=orm_category.level,
+            children=[]
         )
 
     def _to_dose_form_entity(self, orm_dose_form: DoseForm) -> DoseFormEntity:
@@ -124,7 +112,6 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
             deleted_at=orm_atc_code.deleted_at
         )
 
-    # --- Medicine CRUD ---
     async def get_medicine_by_id(self, medicine_id: int) -> Optional[MedicineEntity]:
         orm_medicine = self.db.query(Medicine).filter(Medicine.id == medicine_id).first()
         return self._to_medicine_entity(orm_medicine)
@@ -160,7 +147,7 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         orm_medicine.generic_name = medicine_entity.generic_name
         orm_medicine.status = medicine_entity.status
         orm_medicine.description = medicine_entity.description
-        orm_medicine.updated_at = func.now() # Manually update timestamp if not handled by ORM default
+        orm_medicine.updated_at = func.now()
 
         self.db.add(orm_medicine)
         self.db.commit()
@@ -200,7 +187,6 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         self.db.commit()
         self.db.refresh(orm_medicine)
 
-    # --- Category CRUD (MPTT-aware) ---
     async def get_category_by_id(self, category_id: int) -> Optional[CategoryEntity]:
         orm_category = self.db.query(Category).filter(Category.id == category_id).first()
         return self._to_category_entity(orm_category)
@@ -214,13 +200,6 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         return [self._to_category_entity(c) for c in orm_categories]
 
     async def get_category_tree(self) -> List[CategoryEntity]:
-        """
-        Retrieves all categories and constructs a hierarchical structure using MPTT's methods.
-        """
-        # Use MPTT's `get_tree()` method which returns a list of root nodes
-        # with their children loaded recursively.
-        # Note: MPTT's get_tree() returns ORM objects with `children` populated.
-        # orm_tree_roots = self.db.query(Category).order_by(Category.tree_id, Category.lft).as_tree(nested=True)
         orm_categories = self.db.query(Category).order_by(Category.tree_id, Category.left).all()
 
         id_to_node = {category.id: category for category in orm_categories}
@@ -237,7 +216,6 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
             else:
                 roots.append(category)
 
-        # Helper to convert ORM tree to Entity tree
         def convert_orm_node_to_entity_node(orm_node: Category) -> CategoryEntity:
             entity_node = CategoryEntity(
                 id=orm_node.id,
@@ -255,15 +233,12 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
 
         return [convert_orm_node_to_entity_node(root) for root in roots]
 
-
     async def create_category(self, category_entity: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
         orm_category = Category(
             name=category_entity.name.lower().strip() if category_entity.name else None,
             slug=category_entity.slug.lower().strip() if category_entity.slug else None,
             description=category_entity.description,
             status=category_entity.status,
-            # MPTT will set parent_id, level, lft, rgt
-            # Do NOT set parent_id directly here if using insert_node or append_child
         )
 
         if parent_id:
@@ -279,15 +254,9 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
                 self.db.rollback()
                 raise ValueError(f"Failed to append child category: {e}")
         else:
-            #  insert as a root node
-            # MPTT handles root nodes automatically, so we can just add it
             self.db.add(orm_category)
             self.db.commit()
             self.db.refresh(orm_category)
-
-        return self._to_category_entity(orm_category)
-            # For root nodes, you might need to call `rebuild_tree` if not using `insert_node`
-            # or if auto-rebuild is off. `sqlalchemy_mptt` usually handles this on commit.
 
         return self._to_category_entity(orm_category)
 
@@ -302,138 +271,7 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         orm_category.status = category_entity.status
         orm_category.updated_at = func.now()
 
-        # If parent_id changes, you'd use MPTT's move_to() method
-        # This is more complex and depends on your update logic.
-        # For simplicity, this example assumes parent_id is not changed via this method,
-        # or it's handled by a separate "move_category" operation.
-        # If category_entity.parent_id is provided and differs, you'd fetch the new parent
-        # and call orm_category.move_to(new_parent_orm, position='last-child')
-
         self.db.add(orm_category)
         self.db.commit()
         self.db.refresh(orm_category)
         return self._to_category_entity(orm_category)
-
-    async def delete_category(self, category_id: int) -> bool:
-        orm_category = self.db.query(Category).filter(Category.id == category_id).first()
-        if not orm_category:
-            raise ValueError(f"Category with ID {category_id} not found.")
-        
-        # MPTT provides methods for deleting nodes and their descendants
-        # orm_category.delete() # Deletes the node and its descendants
-        # orm_category.delete_node() # Deletes the node, children become siblings of parent
-        
-        # For this example, let's assume `delete()` which removes the node and its subtree.
-        # If you only want to delete a single node and re-parent children, use `delete_node()`.
-        try:
-            orm_category.delete() # This method is provided by MPTTMixin
-            self.db.commit()
-            return True
-        except IntegrityError as e:
-            self.db.rollback()
-            raise ValueError(f"Error deleting category: {e}")            
-
-    # --- DoseForm CRUD ---
-    async def get_dose_form_by_id(self, dose_form_id: int) -> Optional[DoseFormEntity]:
-        orm_dose_form = self.db.query(DoseForm).filter(DoseForm.id == dose_form_id).first()
-        return self._to_dose_form_entity(orm_dose_form)
-
-    async def get_all_dose_forms(self, skip: int = 0, limit: int = 100) -> List[DoseFormEntity]:
-        orm_dose_forms = self.db.query(DoseForm).offset(skip).limit(limit).all()
-        return [self._to_dose_form_entity(df) for df in orm_dose_forms]
-
-    async def create_dose_form(self, dose_form_entity: DoseFormEntity) -> DoseFormEntity:
-        orm_dose_form = DoseForm(
-            name=dose_form_entity.name,
-            description=dose_form_entity.description
-        )
-        self.db.add(orm_dose_form)
-        self.db.commit()
-        self.db.refresh(orm_dose_form)
-        return self._to_dose_form_entity(orm_dose_form)
-
-    # --- Strength CRUD ---
-    async def get_strength_by_id(self, strength_id: int) -> Optional[StrengthEntity]:
-        orm_strength = self.db.query(Strength).filter(Strength.id == strength_id).first()
-        return self._to_strength_entity(orm_strength)
-
-    async def get_strengths_for_medicine(self, medicine_id: int) -> List[StrengthEntity]:
-        orm_strengths = self.db.query(Strength).filter(Strength.medicine_id == medicine_id).all()
-        return [self._to_strength_entity(s) for s in orm_strengths]
-
-    async def create_strength(self, strength_entity: StrengthEntity) -> StrengthEntity:
-        orm_strength = Strength(
-            medicine_id=strength_entity.medicine_id,
-            dose_form_id=strength_entity.dose_form_id,
-            concentration_amount=strength_entity.concentration_amount,
-            concentration_unit=strength_entity.concentration_unit,
-            volume_amount=strength_entity.volume_amount,
-            volume_unit=strength_entity.volume_unit,
-            chemical_form=strength_entity.chemical_form,
-            info=strength_entity.info,
-            description=strength_entity.description
-        )
-        self.db.add(orm_strength)
-        self.db.commit()
-        self.db.refresh(orm_strength)
-        return self._to_strength_entity(orm_strength)
-
-    # --- ATC Code CRUD ---
-    async def get_atc_code_by_id(self, atc_code_id: int) -> Optional[ATCCodeEntity]:
-        orm_atc_code = self.db.query(ATCCode).filter(ATCCode.id == atc_code_id).first()
-        return self._to_atc_code_entity(orm_atc_code)
-
-    async def get_atc_code_by_code(self, code: str) -> Optional[ATCCodeEntity]:
-        orm_atc_code = self.db.query(ATCCode).filter(ATCCode.code == code).first()
-        return self._to_atc_code_entity(orm_atc_code)
-
-    async def get_atc_code_by_slug(self, slug: str) -> Optional[ATCCodeEntity]:
-        orm_atc_code = self.db.query(ATCCode).filter(ATCCode.slug == slug).first()
-        return self._to_atc_code_entity(orm_atc_code)
-
-    async def get_all_atc_codes(self, skip: int = 0, limit: int = 100) -> List[ATCCodeEntity]:
-        orm_atc_codes = self.db.query(ATCCode).offset(skip).limit(limit).all()
-        return [self._to_atc_code_entity(atc) for atc in orm_atc_codes]
-
-    async def create_atc_code(self, atc_code_entity: ATCCodeEntity) -> ATCCodeEntity:
-        orm_atc_code = ATCCode(
-            parent_id=atc_code_entity.parent_id,
-            name=atc_code_entity.name,
-            code=atc_code_entity.code,
-            level=atc_code_entity.level,
-            slug=atc_code_entity.slug,
-            status=atc_code_entity.status,
-            description=atc_code_entity.description,
-            created_by=atc_code_entity.created_by,
-            updated_by=atc_code_entity.updated_by,
-            deleted_by=atc_code_entity.deleted_by
-        )
-        self.db.add(orm_atc_code)
-        self.db.commit()
-        self.db.refresh(orm_atc_code)
-        return self._to_atc_code_entity(orm_atc_code)
-
-    async def add_atc_codes_to_medicine(self, medicine_id: int, atc_code_ids: List[int]) -> None:
-        orm_medicine = self.db.query(Medicine).filter(Medicine.id == medicine_id).first()
-        if not orm_medicine:
-            raise ValueError(f"Medicine with ID {medicine_id} not found.")
-
-        existing_atc_code_ids = {atc.id for atc in orm_medicine.atc_codes}
-        for atc_id in atc_code_ids:
-            if atc_id not in existing_atc_code_ids:
-                orm_atc_code = self.db.query(ATCCode).filter(ATCCode.id == atc_id).first()
-                if orm_atc_code:
-                    orm_medicine.atc_codes.append(orm_atc_code)
-        self.db.commit()
-        self.db.refresh(orm_medicine)
-
-    async def remove_atc_codes_from_medicine(self, medicine_id: int, atc_code_ids: List[int]) -> None:
-        orm_medicine = self.db.query(Medicine).filter(Medicine.id == medicine_id).first()
-        if not orm_medicine:
-            raise ValueError(f"Medicine with ID {medicine_id} not found.")
-
-        atc_codes_to_remove = [atc for atc in orm_medicine.atc_codes if atc.id in atc_code_ids]
-        for atc in atc_codes_to_remove:
-            orm_medicine.atc_codes.remove(atc)
-        self.db.commit()
-        self.db.refresh(orm_medicine)

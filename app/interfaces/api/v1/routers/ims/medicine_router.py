@@ -126,6 +126,15 @@ async def list_categories(
     """
     return await use_cases.list_categories(skip, limit)
 
+@router.get("/categories/tree", response_model=List[CategoryResponse], tags=["IMS - Categories"])
+async def get_category_tree(
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Retrieve all categories in a hierarchical tree structure.
+    """
+    return await use_cases.get_category_tree()
+
 @router.get("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
 async def get_category_by_id(
     category_id: int,
@@ -158,16 +167,6 @@ async def delete_category(
     """
     await use_cases.delete_category(category_id)
     return {"message": "Category deleted successfully"}
-
-
-@router.get("/categories/tree", response_model=List[CategoryResponse], tags=["IMS - Categories"])
-async def get_category_tree(
-    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
-):
-    """
-    Retrieve all categories in a hierarchical tree structure.
-    """
-    return await use_cases.get_category_tree()
 
 # --- DoseForm Endpoints ---
 @router.post("/dose-forms/", response_model=DoseFormResponse, status_code=status.HTTP_201_CREATED, tags=["IMS - Dose Forms"])

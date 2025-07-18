@@ -1,0 +1,69 @@
+# --- Sample Model using Mixins ---
+class User(Base, TimestampMixin, SoftDeleteMixin, AuditMixin):
+    """A sample User model inheriting all mixins."""
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+
+# --- Database Setup and Example Usage ---
+if __name__ == "__main__":
+    # Use an in-memory SQLite database for demonstration
+    engine = create_engine("sqlite:///:memory:", echo=False) # Set echo=True to see SQL queries
+
+    # Create all tables defined by Base
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        print("--- Creating a new user (INSERT) ---")
+        user1 = User(name="Alice Smith", email="alice@example.com")
+        session.add(user1)
+        session.commit() # Commit to persist and trigger after_insert for ID if needed, and audit log
+        print(f"Created user: {user1}")
+        print(f"User 1 audit logs: {user1.audit_logs}") # Should show one INSERT log
+
+        print("\n--- Updating user's name (UPDATE) ---")
+        user1.name = "Alicia Smith"
+        session.commit() # Commit to trigger update audit log
+        print(f"Updated user: {user1}")
+        print(f"User 1 audit logs: {user1.audit_logs}") # Should show one INSERT and one UPDATE log
+
+        print("\n--- Soft deleting user (UPDATE, via mixin method) ---")
+        user1.soft_delete(session) # This will flush internally
+        session.commit() # Commit to finalize the soft delete and trigger audit log
+        print(f"User soft-deleted: {user1.is_deleted}, deleted_at: {user1.deleted_at}")
+        print(f"User 1 audit logs: {user1.audit_logs}") # Should show another UPDATE log for deleted_at
+
+        print("\n--- Restoring user (UPDATE, via mixin method) ---")
+        user1.restore(session) # This will flush internally
+        session.commit() # Commit to finalize the restore and trigger audit log
+        print(f"User restored: {user1.is_deleted}, deleted_at: {user1.deleted_at}")
+        print(f"User 1 audit logs: {user1.audit_logs}") # Should show another UPDATE log for deleted_at
+
+        print("\n--- Creating another user ---")
+        user2 = User(name="Bob Johnson", email="bob@example.com", is_active=False)
+        session.add(user2)
+        session.commit()
+        print(f"Created user: {user2}")
+
+        print("\n--- Deleting user 2 (DELETE) ---")
+        session.delete(user2)
+        session.commit() # Commit to trigger delete audit log
+        print(f"User 2 deleted. Attempting to query all audit logs:")
+
+        # Query all audit logs to see everything
+        all_audit_logs = session.query(AuditLog).all()
+        for log in all_audit_logs:
+            print(log)
+
+        print("\n--- Querying active users (demonstrating soft delete filtering) ---")
+        active_users = session.query(User).filter(User.is_deleted == False).all()
+        for user in active_users:
+            print(f"Active User: {user.name} (ID: {user.id})")
+
+        print("\n--- Querying soft-deleted users ---")
+        deleted_users = session.query(User).filter(User.is_deleted == True).all()
+        for user in deleted_users:
+            print(f"Deleted User: {user.name} (ID: {user.id})")
