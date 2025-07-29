@@ -58,7 +58,7 @@ class IMedicineRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_category_by_id(self, category_id: int) -> Optional[CategoryEntity]:
+    async def get_category_by_id(self, category_id: int, include_children: bool = True) -> Optional[CategoryEntity]:
         """Retrieves a category by its ID."""
         pass
 

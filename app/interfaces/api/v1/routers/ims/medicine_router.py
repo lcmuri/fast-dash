@@ -138,12 +138,13 @@ async def get_category_tree(
 @router.get("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
 async def get_category_by_id(
     category_id: int,
-    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases),
+    include_children: bool = True # Optional query parameter to include children
 ):
     """
     Retrieve a single category by its ID.
     """
-    return await use_cases.get_category_by_id(category_id)
+    return await use_cases.get_category_by_id(category_id, include_children)
 
 @router.put("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
 async def update_category(

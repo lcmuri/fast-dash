@@ -150,7 +150,7 @@ class MedicineUseCases:
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    async def get_category_by_id(self, category_id: int) -> CategoryResponse:
+    async def get_category_by_id(self, category_id: int, include_children: True) -> CategoryResponse:
         category_entity = await self._medicine_service.get_category_by_id(category_id)
         if not category_entity:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")

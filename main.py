@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.infrastructure.database.session import create_all_tables
 from app.interfaces.api.v1.routers.ims.medicine_router import router as medicine_router
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,6 +23,21 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
+)
+
+origins = [
+    "http://localhost:5173",  # Your React app's origin
+    "http://localhost",
+    "http://127.0.0.1:5173",  # Another common local development address
+    # Add any other origins where your frontend might be hosted (e.g., your production domain)
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Include routers for different domains/features

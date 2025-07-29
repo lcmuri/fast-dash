@@ -1,4 +1,5 @@
 .venv\Scripts\activate.bat
+source D:/pharma/fastapi/fast-dash/.venv/Scripts/activate
 pip install -r requirements.txt
 
 fastapi dev main.py
