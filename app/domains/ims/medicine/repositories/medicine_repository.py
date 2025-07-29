@@ -63,6 +63,16 @@ class IMedicineRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_category_subtree(self, category_id: int) -> Optional[CategoryEntity]:
+        """Get a category with all its descendants as a subtree"""
+        pass
+
+    # @abstractmethod
+    # async def get_direct_children(self, parent_id: int) -> Optional[CategoryEntity]:
+    #     """Get direct children of a category (or root categories if parent_id is None)"""
+    #     pass
+
+    @abstractmethod
     async def get_category_by_slug(self, slug: str) -> Optional[CategoryEntity]:
         """Retrieves a category by its slug."""
         pass
@@ -75,7 +85,7 @@ class IMedicineRepository(ABC):
     @abstractmethod
     async def get_category_tree(self) -> List[CategoryEntity]:
         """Retrieves all categories in a hierarchical tree structure."""
-        pass
+        pass   
 
     @abstractmethod
     async def create_category(self, category: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:

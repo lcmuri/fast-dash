@@ -197,6 +197,12 @@ class MedicineUseCases:
             return response
 
         return [convert_entity_to_response(root) for root in category_entities_tree]
+    
+    async def get_category_subtree(self, category_id: int) -> CategoryResponse:
+        category_entity = await self._medicine_service.get_category_subtree(category_id)
+        if not category_entity:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        return CategoryResponse.model_validate(category_entity)
 
     # --- DoseForm Use Cases ---
     async def create_dose_form(self, dose_form_create: DoseFormCreate) -> DoseFormResponse:

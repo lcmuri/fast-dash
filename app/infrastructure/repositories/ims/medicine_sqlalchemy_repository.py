@@ -356,17 +356,17 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         categories = self.db.query(Category).order_by(Category.name).all()
         return [self._to_category_entity(c) for c in categories]
 
-    async def get_child_categories(self, parent_id: Optional[int] = None) -> List[CategoryEntity]:
-        """Get direct children of a category (or root categories if parent_id is None)"""
-        query = self.db.query(Category)
+    # async def get_direct_children(self, parent_id: Optional[int] = None) -> List[CategoryEntity]:
+    #     """Get direct children of a category (or root categories if parent_id is None)"""
+    #     query = self.db.query(Category)
         
-        if parent_id is None:
-            query = query.filter(Category.parent_id.is_(None))
-        else:
-            query = query.filter(Category.parent_id == parent_id)
+    #     if parent_id is None:
+    #         query = query.filter(Category.parent_id.is_(None))
+    #     else:
+    #         query = query.filter(Category.parent_id == parent_id)
             
-        categories = query.order_by(Category.name).all()
-        return [self._to_category_entity(c) for c in categories]
+    #     categories = query.order_by(Category.name).all()
+    #     return [self._to_category_entity(c) for c in categories]
 
     async def create_category(self, category_entity: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
         orm_category = Category(

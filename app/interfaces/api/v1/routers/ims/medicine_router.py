@@ -146,6 +146,48 @@ async def get_category_by_id(
     """
     return await use_cases.get_category_by_id(category_id, include_children)
 
+@router.get("/categories/{category_id}/subtree", response_model=CategoryResponse, tags=["IMS - Categories"])
+async def get_category_subtree(
+    category_id: int,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases),   
+):
+    """
+    Retrieve a single category by its ID.
+    """
+    return await use_cases.get_category_subtree(category_id)
+
+# @router.get("/categories/{parent_id}/children", response_model=List[CategoryResponse], tags=["IMS - Categories"])
+# async def get_direct_children(
+#     parent_id: int,
+#     use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+# ):
+#     """
+#     Get direct children of a specific parent category.
+#     If no parent_id provided, returns root categories.
+    
+#     Example: 
+#     - /categories/2/children → Returns children of category 2
+#     - /categories/children → Returns root categories
+#     """
+#     return await use_cases.get_direct_children(parent_id)
+
+# @router.get("/categories/childtree/{category_id}", response_model=CategoryResponse)
+# async def get_category_with_children(
+#     category_id: Optional[int] = None,
+#     use_cases: MedicineUseCases = Depends(get_medicine_use_cases),
+# ):
+#     """
+#     Get category with its children.
+#     If no category_id provided, returns all root categories with their children.
+#     """
+#     if category_id is not None:
+#         result = await use_cases.get_category_with_children(category_id)
+#         if not result:
+#             raise HTTPException(status_code=404, detail="Category not found")
+#         return result
+#     else:
+#         return await use_cases.get_root_categories_with_children()
+
 @router.put("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
 async def update_category(
     category_id: int,

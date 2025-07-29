@@ -126,6 +126,18 @@ class MedicineService:
         Retrieves a single category by its ID.
         """
         return await self._repository.get_category_by_id(category_id)
+    
+    async def get_category_subtree(self, category_id: int) -> Optional[CategoryEntity]:
+        """
+        Retrieves all categories in a hierarchical tree structure.
+        """
+        return await self._repository.get_category_subtree(category_id)
+    
+    # async def get_direct_children(self, parent_id: int) -> Optional[CategoryEntity]:
+    #     """
+    #     Retrieves a single category by its ID.
+    #     """
+    #     return await self._repository.get_direct_children(parent_id)
 
     async def update_category_details(self, category_id: int, category_data: CategoryEntity) -> Optional[CategoryEntity]:
         """
@@ -169,7 +181,7 @@ class MedicineService:
         """
         Retrieves all categories in a hierarchical tree structure.
         """
-        return await self._repository.get_category_tree()
+        return await self._repository.get_category_tree()        
 
     # DoseForm related methods
     async def create_new_dose_form(self, dose_form_data: DoseFormEntity) -> DoseFormEntity:
