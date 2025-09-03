@@ -1,7 +1,7 @@
 # app/interfaces/api/v1/routers/ims/medicine_router.py
 
 from fastapi import APIRouter, Depends, status, HTTPException
-from typing import List
+from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 
 # Import Pydantic schemas for request/response bodies
@@ -104,28 +104,7 @@ async def delete_medicine(
     return {"message": "Medicine deleted successfully"}
 
 # --- Category Endpoints ---
-@router.post("/categories/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED, tags=["IMS - Categories"])
-async def create_category(
-    category_create: CategoryCreate,
-    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
-):
-    """
-    Create a new category.
-    Optionally specify `parent_id` to create a nested category.
-    """
-    return await use_cases.create_category(category_create)
-
-@router.get("/categories/", response_model=List[CategoryResponse], tags=["IMS - Categories"])
-async def list_categories(
-    skip: int = 0,
-    limit: int = 100,
-    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
-):
-    """
-    Retrieve a list of all categories with pagination (flat list).
-    """
-    return await use_cases.list_categories(skip, limit)
-
+# NEW ENDPOINT: Get top-level categories with child counts
 @router.get("/categories/tree", response_model=List[CategoryResponse], tags=["IMS - Categories"])
 async def get_category_tree(
     use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
@@ -134,6 +113,46 @@ async def get_category_tree(
     Retrieve all categories in a hierarchical tree structure.
     """
     return await use_cases.get_category_tree()
+
+@router.get("/categories/top-level", response_model=List[Dict[str, Any]], tags=["IMS - Categories"])
+async def get_top_level_categories_with_child_count(
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Retrieve all top-level categories, including a count of their direct children.
+    This is for initial display or a "root" view.
+    """
+    return await use_cases.get_top_level_categories_with_child_count()
+
+
+# NEW ENDPOINT: Get direct children of a specific category with child counts
+@router.get("/categories/{category_id}/direct-children/", response_model=List[Dict[str, Any]], tags=["IMS - Categories"])
+async def get_direct_children_of_category(
+    category_id: int,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Retrieve direct children of a specific category, including a count of their own direct children.
+    Use this when a user clicks on a parent category to expand its immediate children.
+    """
+    children = await use_cases.get_children_of_category_with_child_count(category_id)
+    if not children:
+        # It's debatable whether 404 is appropriate if a parent exists but has no children.
+        # Returning an empty list `[]` is usually sufficient for "no children found".
+        # If you want to indicate that the parent_id itself wasn't found, you'd need
+        # a separate check for the existence of `category_id` in the use case.
+        pass
+    return children
+
+@router.get("/categories/{category_id}/subtree", response_model=CategoryResponse, tags=["IMS - Categories"])
+async def get_category_subtree(
+    category_id: int,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases),   
+):
+    """
+    Retrieve a single category by its ID.
+    """
+    return await use_cases.get_category_subtree(category_id)
 
 @router.get("/categories/{category_id}", response_model=CategoryResponse, tags=["IMS - Categories"])
 async def get_category_by_id(
@@ -146,16 +165,14 @@ async def get_category_by_id(
     """
     return await use_cases.get_category_by_id(category_id, include_children)
 
-@router.get("/categories/{category_id}/subtree", response_model=CategoryResponse, tags=["IMS - Categories"])
-async def get_category_subtree(
-    category_id: int,
-    use_cases: MedicineUseCases = Depends(get_medicine_use_cases),   
-):
-    """
-    Retrieve a single category by its ID.
-    """
-    return await use_cases.get_category_subtree(category_id)
-
+# @router.get("/categories/tree", response_model=List[CategoryResponse], tags=["IMS - Categories"])
+# async def get_category_tree(
+#     use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+# ):
+#     """
+#     Retrieve all categories in a hierarchical tree structure.
+#     """
+#     return await use_cases.get_category_tree()
 # @router.get("/categories/{parent_id}/children", response_model=List[CategoryResponse], tags=["IMS - Categories"])
 # async def get_direct_children(
 #     parent_id: int,
@@ -210,6 +227,28 @@ async def delete_category(
     """
     await use_cases.delete_category(category_id)
     return {"message": "Category deleted successfully"}
+
+@router.post("/categories/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED, tags=["IMS - Categories"])
+async def create_category(
+    category_create: CategoryCreate,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Create a new category.
+    Optionally specify `parent_id` to create a nested category.
+    """
+    return await use_cases.create_category(category_create)
+
+@router.get("/categories/", response_model=List[CategoryResponse], tags=["IMS - Categories"])
+async def list_categories(
+    skip: int = 0,
+    limit: int = 100,
+    use_cases: MedicineUseCases = Depends(get_medicine_use_cases)
+):
+    """
+    Retrieve a list of all categories with pagination (flat list).
+    """
+    return await use_cases.list_categories(skip, limit)
 
 # --- DoseForm Endpoints ---
 @router.post("/dose-forms/", response_model=DoseFormResponse, status_code=status.HTTP_201_CREATED, tags=["IMS - Dose Forms"])

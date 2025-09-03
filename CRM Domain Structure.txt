@@ -1,0 +1,75 @@
+app/
+├── domains/
+│   └── crm/                     # Customer Relationship Management
+│       ├── customer/            # Customer management
+│       │   ├── entities/
+│       │   │   └── customer.py  # CustomerEntity, CustomerTypeEntity
+│       │   ├── repositories/
+│       │   │   └── customer_repository.py
+│       │   └── services/
+│       │       └── customer_service.py
+│       ├── sentiment/           # Customer sentiment tracking
+│       │   ├── entities/
+│       │   │   └── sentiment.py # SentimentEntity, FeedbackEntity
+│       │   ├── repositories/
+│       │   │   └── sentiment_repository.py
+│       │   └── services/
+│       │       └── sentiment_service.py
+│       ├── out_of_stock/        # Out-of-stock medicine tracking
+│       │   ├── entities/
+│       │   │   └── out_of_stock.py # OutOfStockEntity
+│       │   ├── repositories/
+│       │   │   └── out_of_stock_repository.py
+│       │   └── services/
+│       │       └── out_of_stock_service.py
+│       └── visit/               # Customer visit tracking
+│           ├── entities/
+│           │   └── visit.py     # VisitEntity, VisitTypeEntity
+│           ├── repositories/
+│           │   └── visit_repository.py
+│           └── services/
+│               └── visit_service.py
+│
+├── infrastructure/
+│   ├── database/
+│   │   └── models/
+│   │       └── crm/             # CRM ORM models
+│   │           ├── __init__.py
+│   │           ├── customer.py
+│   │           ├── sentiment.py
+│   │           ├── out_of_stock.py
+│   │           └── visit.py
+│   └── repositories/
+│       └── crm/                 # CRM repository implementations
+│           ├── __init__.py
+│           ├── customer_sqlalchemy_repository.py
+│           ├── sentiment_sqlalchemy_repository.py
+│           ├── out_of_stock_sqlalchemy_repository.py
+│           └── visit_sqlalchemy_repository.py
+│
+├── application/
+│   ├── use_cases/
+│   │   └── crm/                 # CRM use cases
+│   │       ├── __init__.py
+│   │       ├── customer_use_cases.py
+│   │       ├── sentiment_use_cases.py
+│   │       ├── out_of_stock_use_cases.py
+│   │       └── visit_use_cases.py
+│   └── schemas/
+│       └── crm/                 # CRM schemas
+│           ├── __init__.py
+│           ├── customer_schemas.py
+│           ├── sentiment_schemas.py
+│           ├── out_of_stock_schemas.py
+│           └── visit_schemas.py
+│
+├── interfaces/
+│   └── api/
+│       └── v1/
+│           └── routers/
+│               └── crm/         # CRM API endpoints
+│                   ├── __init__.py
+│                   ├── customer_router.py
+│                   ├── sentiment_router.py
+│                   ├── out_of_stock_router.py
+│                   └── visit_router.py

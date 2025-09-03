@@ -1,8 +1,8 @@
 # app/infrastructure/repositories/ims/medicine_sqlalchemy_repository.py
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any # Added Dict, Any for raw data return
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, select # Import select for modern SQLAlchemy queries
 from sqlalchemy.exc import IntegrityError
 
 from app.domains.ims.medicine.repositories.medicine_repository import IMedicineRepository
@@ -59,30 +59,9 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
 
     def _to_category_entity(self, orm_category: Category) -> CategoryEntity:
         if not orm_category:
-            print("Warning: Received None in _to_category_entity")
+            # print("Warning: Received None in _to_category_entity") # Keep for debugging if needed
             return None
         
-        # try:
-        # Debug print the ORM object's attributes
-        #     print("Converting ORM to Entity - raw attributes:", orm_category.__dict__)
-            
-        #     # Convert - adjust fields according to your actual models
-        #     return CategoryEntity(
-        #         id=orm_category.id,
-        #         name=orm_category.name,
-        #         # Add all other necessary fields
-        #         created_at=orm_category.created_at,
-        #         updated_at=orm_category.updated_at
-        #     )
-        # except Exception as e:
-        #     print(f"Error converting Category ORM to Entity: {str(e)}")
-        #     print("Problematic ORM object:", orm_category.__dict__)
-        #     raise
-        
-        # MPTT models have .children, but it's a query property.
-        # To get the full hierarchy, we'll rely on get_category_tree or build it.
-        # For a single category, we'll just return its direct properties.
-        # The `children` list in the entity will be populated when building the tree.
         return CategoryEntity(
             id=orm_category.id,
             parent_id=orm_category.parent_id,
@@ -93,7 +72,7 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
             created_at=orm_category.created_at,
             updated_at=orm_category.updated_at,
             level=orm_category.level, # Include MPTT level
-            children=[] # Children will be populated when building the tree
+            children=[] # Children will be populated when building the tree or explicitly loaded
         )
 
     def _to_dose_form_entity(self, orm_dose_form: DoseForm) -> DoseFormEntity:
@@ -223,94 +202,29 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         self.db.refresh(orm_medicine)
 
     # --- Category CRUD (MPTT-aware) ---
-    # async def get_category_by_id(self, category_id: int) -> Optional[CategoryEntity]:
-    #     query = self.db.query(Category).filter(Category.id == category_id)
-    #     print("SQL:", query.statement.compile(compile_kwargs={"literal_binds": True}))
-    #     orm_category = query.first()
-    #     return self._to_category_entity(orm_category)
-    # 
-    async def get_category_by_id(self, category_id: int, include_children: bool = True) -> Optional[CategoryEntity]:
-        """Get category by ID with optional children"""
-        query = self.db.query(Category).filter(Category.id == category_id)
-        
-        if include_children:
-            query = query.options(joinedload(Category.children))
-        
-        orm_category = query.first()
-        
-        if not orm_category:
-            return None
-            
-        category_entity = self._to_category_entity(orm_category)
-        
-        if include_children and hasattr(orm_category, 'children'):
-            category_entity.children = [
-                self._to_category_entity(child) 
-                for child in orm_category.children
-            ]
-            
-        return category_entity   
+    async def get_category_by_id(self, category_id: int) -> Optional[CategoryEntity]:
+        """
+        Retrieves a single category by its ID. Does not include children by default.
+        """
+        orm_category = self.db.query(Category).filter(Category.id == category_id).first()
+        return self._to_category_entity(orm_category)
 
     async def get_category_by_slug(self, slug: str) -> Optional[CategoryEntity]:
         orm_category = self.db.query(Category).filter(Category.slug == slug).first()
         return self._to_category_entity(orm_category)
 
     async def get_all_categories(self, skip: int = 0, limit: int = 100) -> List[CategoryEntity]:
+        """Get all categories as a flat list with pagination."""
         orm_categories = self.db.query(Category).offset(skip).limit(limit).all()
         return [self._to_category_entity(c) for c in orm_categories]
 
-    # async def get_category_tree(self) -> List[CategoryEntity]:
-        """
-        Retrieves all categories and constructs a hierarchical structure using MPTT's methods.
-        """
-        # Use MPTT's `get_tree()` method which returns a list of root nodes
-        # with their children loaded recursively.
-        # Note: MPTT's get_tree() returns ORM objects with `children` populated.
-        # orm_tree_roots = self.db.query(Category).order_by(Category.tree_id, Category.lft).as_tree(nested=True)
-        # orm_categories = self.db.query(Category).order_by(Category.tree_id, Category.left).all()
-
-        # id_to_node = {category.id: category for category in orm_categories}
-
-        # for category in orm_categories:
-        #     category.children = []
-
-        # roots = []
-
-        # for category in orm_categories:
-        #     if category.parent_id and category.parent_id in id_to_node:
-        #         parent = id_to_node[category.parent_id]
-        #         parent.children.append(category)
-        #     else:
-        #         roots.append(category)
-
-        # # Helper to convert ORM tree to Entity tree
-        # def convert_orm_node_to_entity_node(orm_node: Category) -> CategoryEntity:
-        #     entity_node = CategoryEntity(
-        #         id=orm_node.id,
-        #         parent_id=orm_node.parent_id,
-        #         name=orm_node.name,
-        #         slug=orm_node.slug,
-        #         description=orm_node.description,
-        #         status=orm_node.status,
-        #         created_at=orm_node.created_at.isoformat() if orm_node.created_at else None,
-        #         updated_at=orm_node.updated_at.isoformat() if orm_node.updated_at else None,
-        #         level=orm_node.level,
-        #         children=[convert_orm_node_to_entity_node(child) for child in (orm_node.children or [])]
-        #     )
-        #     return entity_node
-
-        # return [convert_orm_node_to_entity_node(root) for root in roots]
-
     async def get_category_tree(self) -> List[CategoryEntity]:
-        """Returns complete category hierarchy as a tree structure"""
-        # Get all categories ordered by MPTT tree structure
+        """Returns complete category hierarchy as a list of root CategoryEntities with nested children."""
         all_categories = self.db.query(Category).order_by(Category.tree_id, Category.left).all()
         
-        # Create mapping of all categories
         category_map = {cat.id: self._to_category_entity(cat) for cat in all_categories}
         root_categories = []
         
-        # Build hierarchy
         for orm_cat in all_categories:
             entity = category_map[orm_cat.id]
             
@@ -320,62 +234,141 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
                     parent.children.append(entity)
             else:
                 root_categories.append(entity)
-                
+        
         return root_categories
 
     async def get_category_subtree(self, category_id: int) -> Optional[CategoryEntity]:
-            """Get a category with all its descendants as a subtree"""
-            root_category = self.db.query(Category).filter(Category.id == category_id).first()
-            if not root_category:
-                return None
-                
-            # Get all descendants using MPTT properties
-            descendants = self.db.query(Category).filter(
-                Category.tree_id == root_category.tree_id,
-                Category.left >= root_category.left,
-                Category.right <= root_category.right
-            ).order_by(Category.left).all()
+        """Get a category with all its descendants as a subtree."""
+        root_category = self.db.query(Category).filter(Category.id == category_id).first()
+        if not root_category:
+            return None
             
-            # Build mapping and hierarchy
-            category_map = {}
-            for cat in descendants:
-                category_map[cat.id] = self._to_category_entity(cat)
-                
-            for cat in descendants:
-                if cat.id == root_category.id:
-                    continue
-                    
-                parent = category_map.get(cat.parent_id)
-                if parent:
-                    parent.children.append(category_map[cat.id])
-                    
-            return category_map[root_category.id]
-
-    async def get_flat_categories(self) -> List[CategoryEntity]:
-        """Get all categories as a flat list"""
-        categories = self.db.query(Category).order_by(Category.name).all()
-        return [self._to_category_entity(c) for c in categories]
-
-    # async def get_direct_children(self, parent_id: Optional[int] = None) -> List[CategoryEntity]:
-    #     """Get direct children of a category (or root categories if parent_id is None)"""
-    #     query = self.db.query(Category)
-        
-    #     if parent_id is None:
-    #         query = query.filter(Category.parent_id.is_(None))
-    #     else:
-    #         query = query.filter(Category.parent_id == parent_id)
+        # Get all descendants using MPTT properties, including the root itself
+        descendants = self.db.query(Category).filter(
+            Category.tree_id == root_category.tree_id,
+            Category.left >= root_category.left,
+            Category.right <= root_category.right
+        ).order_by(Category.left).all()
             
-    #     categories = query.order_by(Category.name).all()
-    #     return [self._to_category_entity(c) for c in categories]
+        category_map = {}
+        for cat in descendants:
+            category_map[cat.id] = self._to_category_entity(cat)
+                
+        for cat in descendants:
+            if cat.id == root_category.id:
+                continue # Skip the root itself when assigning children
+                
+            parent = category_map.get(cat.parent_id)
+            if parent:
+                parent.children.append(category_map[cat.id])
+                    
+        return category_map[root_category.id]
 
+    # --- NEW METHODS FOR LAZY LOADING ---
+
+    async def get_top_level_categories_with_child_count(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves top-level categories and the count of their direct children.
+        Returns a list of dictionaries, not CategoryEntity, to include `children_count`.
+        """
+        # Query for all categories and their direct children counts
+        # This is more efficient than fetching all and then processing in Python
+        subquery = (
+            self.db.query(
+                Category.parent_id,
+                func.count(Category.id).label("children_count")
+            )
+            .filter(Category.parent_id.isnot(None)) # Only consider children
+            .group_by(Category.parent_id)
+            .subquery()
+        )
+
+        query = self.db.query(
+            Category,
+            subquery.c.children_count
+        ).outerjoin(
+            subquery, Category.id == subquery.c.parent_id
+        ).filter(
+            Category.parent_id.is_(None) # Filter for top-level categories
+        ).order_by(Category.name)
+
+        results = query.all()
+
+        formatted_results = []
+        for orm_category, children_count in results:
+            category_dict = {
+                "id": orm_category.id,
+                "name": orm_category.name,
+                "slug": orm_category.slug,
+                "description": orm_category.description,
+                "status": orm_category.status,
+                "parent_id": orm_category.parent_id,
+                "created_at": orm_category.created_at.isoformat() if orm_category.created_at else None,
+                "updated_at": orm_category.updated_at.isoformat() if orm_category.updated_at else None,
+                "level": orm_category.level,
+                "has_children": (children_count or 0) > 0, # Ensure children_count is not None
+                "children_count": (children_count or 0)
+            }
+            formatted_results.append(category_dict)
+        return formatted_results
+
+    async def get_children_of_category_with_child_count(self, category_id: int) -> List[Dict[str, Any]]:
+        """
+        Retrieves direct children of a given category and the count of their direct children.
+        Returns a list of dictionaries.
+        """
+        # First, check if the parent category exists.
+        parent_exists = self.db.query(Category.id).filter(Category.id == category_id).first()
+        if not parent_exists:
+            return [] # Or raise an error if you prefer to indicate parent not found
+
+        # Optimized query to get direct children and their respective child counts
+        subquery = (
+            self.db.query(
+                Category.parent_id,
+                func.count(Category.id).label("children_count")
+            )
+            .filter(Category.parent_id.isnot(None))
+            .group_by(Category.parent_id)
+            .subquery()
+        )
+
+        query = self.db.query(
+            Category,
+            subquery.c.children_count
+        ).outerjoin(
+            subquery, Category.id == subquery.c.parent_id
+        ).filter(
+            Category.parent_id == category_id # Filter for direct children of the given category_id
+        ).order_by(Category.name)
+
+        results = query.all()
+
+        formatted_results = []
+        for orm_category, children_count in results:
+            category_dict = {
+                "id": orm_category.id,
+                "name": orm_category.name,
+                "slug": orm_category.slug,
+                "description": orm_category.description,
+                "status": orm_category.status,
+                "parent_id": orm_category.parent_id,
+                "created_at": orm_category.created_at.isoformat() if orm_category.created_at else None,
+                "updated_at": orm_category.updated_at.isoformat() if orm_category.updated_at else None,
+                "level": orm_category.level,
+                "has_children": (children_count or 0) > 0,
+                "children_count": (children_count or 0)
+            }
+            formatted_results.append(category_dict)
+        return formatted_results
+
+    # --- Category CRUD (continued) ---
     async def create_category(self, category_entity: CategoryEntity, parent_id: Optional[int] = None) -> CategoryEntity:
         orm_category = Category(
             name=category_entity.name.lower().strip() if category_entity.name else None,
             slug=category_entity.slug.lower().strip() if category_entity.slug else None,
             description=category_entity.description,
             status=category_entity.status,
-            # MPTT will set parent_id, level, lft, rgt
-            # Do NOT set parent_id directly here if using insert_node or append_child
         )
 
         if parent_id:
@@ -383,25 +376,20 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
             if not parent_orm:
                 raise ValueError(f"Parent category with ID {parent_id} not found.")
             try:
-                orm_category.parent_id = parent_id
-                self.db.add(orm_category)
+                # Use MPTT's append_child for proper tree maintenance
+                parent_orm.append_child(orm_category) 
                 self.db.commit()
-                self.db.refresh(orm_category)
+                self.db.refresh(orm_category) # Refresh to get MPTT fields (level, lft, rgt)
             except IntegrityError as e:
                 self.db.rollback()
                 raise ValueError(f"Failed to append child category: {e}")
         else:
-            #  insert as a root node
-            # MPTT handles root nodes automatically, so we can just add it
             self.db.add(orm_category)
             self.db.commit()
             self.db.refresh(orm_category)
 
         return self._to_category_entity(orm_category)
-            # For root nodes, you might need to call `rebuild_tree` if not using `insert_node`
-            # or if auto-rebuild is off. `sqlalchemy_mptt` usually handles this on commit.
-
-        return self._to_category_entity(orm_category)
+            
 
     async def update_category(self, category_id: int, category_entity: CategoryEntity) -> Optional[CategoryEntity]:
         orm_category = self.db.query(Category).filter(Category.id == category_id).first()
@@ -414,12 +402,16 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         orm_category.status = category_entity.status
         orm_category.updated_at = func.now()
 
-        # If parent_id changes, you'd use MPTT's move_to() method
-        # This is more complex and depends on your update logic.
-        # For simplicity, this example assumes parent_id is not changed via this method,
-        # or it's handled by a separate "move_category" operation.
-        # If category_entity.parent_id is provided and differs, you'd fetch the new parent
-        # and call orm_category.move_to(new_parent_orm, position='last-child')
+        # Handle parent_id change if needed (requires MPTT's move_to method)
+        # if category_entity.parent_id is not None and orm_category.parent_id != category_entity.parent_id:
+        #     new_parent_orm = self.db.query(Category).filter(Category.id == category_entity.parent_id).first()
+        #     if new_parent_orm:
+        #         orm_category.move_to(new_parent_orm, position='last-child')
+        #     else:
+        #         raise ValueError(f"New parent category with ID {category_entity.parent_id} not found.")
+        # elif category_entity.parent_id is None and orm_category.parent_id is not None:
+        #     # Move to root
+        #     orm_category.move_to(None) # MPTT allows moving to None for root
 
         self.db.add(orm_category)
         self.db.commit()
@@ -431,41 +423,38 @@ class MedicineSQLAlchemyRepository(IMedicineRepository):
         if not orm_category:
             raise ValueError(f"Category with ID {category_id} not found.")
         
-        # MPTT provides methods for deleting nodes and their descendants
-        # orm_category.delete() # Deletes the node and its descendants
-        # orm_category.delete_node() # Deletes the node, children become siblings of parent
-        
-        # For this example, let's assume `delete()` which removes the node and its subtree.
-        # If you only want to delete a single node and re-parent children, use `delete_node()`.
         try:
-            orm_category.delete() # This method is provided by MPTTMixin
+            # MPTT's delete() method deletes the node and its descendants
+            self.db.delete(orm_category) # SQLAlchemy delete
+            self.db.commit() # Commit triggers MPTT's tree reconstruction
+            return True
+        except IntegrityError as e:
+            self.db.rollback()
+            raise ValueError(f"Error deleting category: {e}") 
+
+    async def move_category(self, category_id: int, new_parent_id: Optional[int]) -> bool:
+        """Move category to new parent (None for root)"""
+        category = self.db.query(Category).filter(Category.id == category_id).first()
+        if not category:
+            return False
+            
+        try:
+            if new_parent_id:
+                new_parent = self.db.query(Category).filter(Category.id == new_parent_id).first()
+                if not new_parent:
+                    return False
+                # Use MPTT's move_to method
+                category.move_to(new_parent, position='last-child')
+            else:
+                # Move to root
+                category.move_to(None) 
+                    
             self.db.commit()
             return True
         except IntegrityError as e:
             self.db.rollback()
-            raise ValueError(f"Error deleting category: {e}")  
-
-        async def move_category(self, category_id: int, new_parent_id: Optional[int]) -> bool:
-            """Move category to new parent (None for root)"""
-            category = self.db.query(Category).filter(Category.id == category_id).first()
-            if not category:
-                return False
-                
-            try:
-                if new_parent_id:
-                    new_parent = self.db.query(Category).filter(Category.id == new_parent_id).first()
-                    if not new_parent:
-                        return False
-                    category.parent = new_parent
-                else:
-                    category.parent = None
-                    
-                self.db.commit()
-                return True
-            except IntegrityError:
-                self.db.rollback()
-                return False          
-
+            raise ValueError(f"Error moving category: {e}") # Provide more specific error info
+    
     # --- DoseForm CRUD ---
     async def get_dose_form_by_id(self, dose_form_id: int) -> Optional[DoseFormEntity]:
         orm_dose_form = self.db.query(DoseForm).filter(DoseForm.id == dose_form_id).first()

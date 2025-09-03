@@ -1,7 +1,7 @@
 # app/domains/ims/medicine/repositories/medicine_repository.py
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from app.domains.ims.medicine.entities.medicine import (
     MedicineEntity,
@@ -85,6 +85,22 @@ class IMedicineRepository(ABC):
     @abstractmethod
     async def get_category_tree(self) -> List[CategoryEntity]:
         """Retrieves all categories in a hierarchical tree structure."""
+        pass
+
+    @abstractmethod
+    async def get_top_level_categories_with_child_count(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves top-level categories, including a count of their direct children.
+        The returned dictionaries should include 'id', 'name', 'has_children', 'children_count', etc.
+        """
+        pass
+
+    @abstractmethod
+    async def get_children_of_category_with_child_count(self, category_id: int) -> List[Dict[str, Any]]:
+        """
+        Retrieves direct children of a specific category, including a count of their own direct children.
+        The returned dictionaries should include 'id', 'name', 'has_children', 'children_count', etc.
+        """
         pass   
 
     @abstractmethod

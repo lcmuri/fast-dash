@@ -1,6 +1,6 @@
 # app/domains/ims/medicine/services/medicine_service.py
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from slugify import slugify # Import the slugify function
 
 from app.domains.ims.medicine.entities.medicine import (
@@ -126,6 +126,20 @@ class MedicineService:
         Retrieves a single category by its ID.
         """
         return await self._repository.get_category_by_id(category_id)
+    
+    # Corrected method signature and return type
+    async def get_top_level_categories_with_child_count(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves top-level categories, including a count of their direct children.
+        """
+        return await self._repository.get_top_level_categories_with_child_count()
+
+    # New method to fetch direct children of a category with their child counts
+    async def get_children_of_category_with_child_count(self, category_id: int) -> List[Dict[str, Any]]:
+        """
+        Retrieves direct children of a specific category, including a count of their own direct children.
+        """
+        return await self._repository.get_children_of_category_with_child_count(category_id)  
     
     async def get_category_subtree(self, category_id: int) -> Optional[CategoryEntity]:
         """

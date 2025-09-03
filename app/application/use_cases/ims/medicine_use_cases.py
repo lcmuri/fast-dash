@@ -1,6 +1,6 @@
 # app/application/use_cases/ims/medicine_use_cases.py
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import HTTPException, status
 
 from app.domains.ims.medicine.entities.medicine import (
@@ -203,6 +203,21 @@ class MedicineUseCases:
         if not category_entity:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
         return CategoryResponse.model_validate(category_entity)
+    
+    # NEW METHOD: Get top-level categories with child counts
+    async def get_top_level_categories_with_child_count(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves top-level categories from the service, including their direct children counts.
+        """
+        return await self._medicine_service.get_top_level_categories_with_child_count()
+
+    # NEW METHOD: Get direct children of a category with child counts
+    async def get_children_of_category_with_child_count(self, category_id: int) -> List[Dict[str, Any]]:
+        """
+        Retrieves direct children of a specific category from the service,
+        including a count of their own direct children.
+        """
+        return await self._medicine_service.get_children_of_category_with_child_count(category_id)
 
     # --- DoseForm Use Cases ---
     async def create_dose_form(self, dose_form_create: DoseFormCreate) -> DoseFormResponse:
